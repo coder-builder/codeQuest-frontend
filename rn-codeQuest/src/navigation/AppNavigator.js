@@ -5,15 +5,14 @@ import { ActivityIndicator } from 'react-native-paper';
 
 import { createStackNavigator } from '@react-navigation/stack';
 
-import HomeScreen from '../screens/HomeScreen';
-import LoginScreen from '../screens/LoginScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
 const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   // AuthContext에서 상태 가져오기
-  const { isLoggedIn, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
   // 1. 로딩 중 (토큰 체크 중)
   if (isLoading) {
@@ -27,7 +26,7 @@ const AppNavigator = () => {
   // 2. 로그인 상태에 따른 네비게이터 분기
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {isLoggedIn ? (
+      {isAuthenticated ? (
         // 로그인 상태일 때
         <Stack.Screen name="Profile" component={ProfileScreen} />
       ) : (

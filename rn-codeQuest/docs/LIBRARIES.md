@@ -14,3 +14,4 @@ npm install react-native-toast-message
 npm install react-native-keychain
 npm install react-native-mmkv
 npm install react-native-device-info
+npm install @react-navigation/native-stack

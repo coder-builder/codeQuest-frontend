@@ -73,7 +73,7 @@ apiClient.interceptors.response.use(
   }
 );
 
-// API 함수들
+// 기본 API 함수들 (GET, POST, PUT, DELETE)
 export const api = {
   // GET 요청
   get: (url, params = {}) => {

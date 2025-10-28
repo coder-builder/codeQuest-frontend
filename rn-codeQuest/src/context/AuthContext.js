@@ -32,33 +32,23 @@ export const AuthProvider = ({ children }) => {
       // 디바이스 정보 가져오기
       const deviceInfo = await DeviceInfoService.getDeviceInfo();
       setDeviceInfo(deviceInfo);
-      console.log('디바이스 정보 설정 완료:', deviceInfo);
 
       // 디바이스 정보 로딩 후 자동 로그인 체크
       await checkAutoLogin();
-      console.log('자동 로그인 체크 완료');
 
     } catch (error) {
       console.error('초기화 중 오류 발생:', error);
     } finally {
       setIsLoading(false);
-      console.log('초기화 완료, 로딩 상태 해제');
     }  
   };
 
   const checkAutoLogin = async () => {
     try {
-      console.log('🔄 자동 로그인 체크 시작...');
-
       const tokens = await Storage.getSecure('AUTH_TOKENS');
       const token = tokens?.accessToken;
 
       const userInfo = await Storage.getUserInfo();
-
-      console.log('📦 저장된 데이터 확인:', {
-        hasToken: !!token,
-        hasUserInfo: !!userInfo
-      });
 
       if (token && userInfo) {
         try {

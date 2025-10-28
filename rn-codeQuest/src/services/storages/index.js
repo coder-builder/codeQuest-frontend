@@ -18,8 +18,7 @@ class StorageManager {
     this.keys = StorageKeys;
   }
 
-  // ================ 범용 메서드 ================== //
-
+  // ================ 범용 메서드 (이것만 참고) ================== //
   // 보안 데이터용
   async setSecure(key,data) {
     return this.adapter.setSecure(key, data);
