@@ -1,5 +1,10 @@
 // API
-export const API_BASE_URL = 'https://codequest.co.kr';
+export let API_BASE_URL = '';
+if (__DEV__) {
+  // API_BASE_URL = 'http://172.28.192.1:8000/api'; // Kim's Local IP
+} else {
+  API_BASE_URL = 'https://codequest.co.kr/api';
+}
 
 // App dimensions
 export const SCREEN_WIDTH = 375;
