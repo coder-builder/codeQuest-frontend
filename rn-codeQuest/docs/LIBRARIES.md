@@ -10,6 +10,8 @@ npm install react-native-screens react-native-safe-area-context
 npm install @react-native-async-storage/async-storage
 npm install axios
 npm install react-native-vector-icons
+npm install react-native-haptic-feedback
+npx expo install expo-haptics
 npm install react-native-toast-message
 npm install react-native-keychain
 npm install react-native-mmkv
