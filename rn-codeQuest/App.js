@@ -57,11 +57,11 @@ const App = () => {
               options={{ tabBarLabel: "랭크" }}
             />
 
-            <Tab.Screen
+            {/* <Tab.Screen
               name="ResultScreen"
               component={ResultScreen}
               options={{ tabBarLabel: "레슨결과" }}
-            />
+            /> */}
             
           </Tab.Navigator>
         </NavigationContainer>
