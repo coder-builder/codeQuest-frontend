@@ -1,24 +1,50 @@
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import React, { useState } from 'react'
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native'
+import React, { useState, useEffect } from 'react'
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { lightImpact } from '../utils/haptic'; //햅틱 추가
+import { lightImpact } from '../utils/haptic';
+import { useAuth } from '../context/AuthContext';
+import { profileAPI } from '../apis/api';
 
 const ProfileScreen = () => {
+  const { user, logout } = useAuth();
 
-  // 임시 데이터 (나중에 API에서 가져옴)
-  const [userData, setUserData] = useState({
-    name: '김코딩',
-    email: 'coding@example.com',
-    profileImage: '',
-    streak: 15, // 연속 학습일
-    totalXP: 2450, // 총 경험치
-    completedLessons: 45,
-    badges: 8,
-    weeklyGoal: 5, // 주 5일 목표
-    currentWeekDays: 3, // 이번주 3일 완료
-    level: 7,
-    rank: 'Gold',
-  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+
+  // 사용자 통계 로드
+  useEffect(() => {
+    loadUserStats();
+  }, []);
+
+  const loadUserStats = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const statsData = await profileAPI.getMyStats();
+      setStats(statsData);
+    } catch (err) {
+      console.error('통계 로드 실패:', err);
+      setError('통계를 불러오는데 실패했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 기본값 설정
+  const userData = {
+    name: user?.username || '사용자',
+    email: user?.email || 'user@example.com',
+    profileImage: user?.profile_image || '',
+    streak: user?.streak_days || 0,
+    totalXP: user?.total_xp || 0,
+    completedLessons: stats?.total_completed_stages || 0,
+    badges: 0,
+    weeklyGoal: 5,
+    currentWeekDays: 3,
+    level: stats?.level || 1,
+    rank: 'Beginner',
+  };
 
 
 

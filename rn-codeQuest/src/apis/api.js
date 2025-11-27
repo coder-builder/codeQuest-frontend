@@ -101,4 +101,95 @@ export const userAPI = {
   deleteUser: (id) => api.delete(`/users/${id}`),
 };
 
+// 월드 API
+export const worldAPI = {
+  // 전체 월드 목록 조회
+  getWorlds: () => api.get('/api/worlds/'),
+
+  // 사용자별 월드 진행상황 조회
+  getUserWorlds: () => api.get('/api/user-worlds/'),
+
+  // 특정 월드 상세 조회
+  getWorldDetail: (worldId) => api.get(`/api/worlds/${worldId}/`),
+
+  // 특정 월드의 스테이지 목록 조회
+  getWorldStages: (worldId) => api.get(`/api/worlds/${worldId}/stages/`),
+
+  // 월드 잠금 해제
+  unlockWorld: (worldId) => api.post(`/api/user-worlds/${worldId}/unlock/`),
+
+  // 사용자의 특정 월드 진행상황 조회
+  getUserWorldProgress: (worldId) => api.get(`/api/user-worlds/${worldId}/`),
+};
+
+// 스테이지 API
+export const stageAPI = {
+  // 특정 스테이지 상세 조회
+  getStageDetail: (stageId) => api.get(`/api/stages/${stageId}/`),
+
+  // 스테이지의 유닛 목록 조회 (레슨 포함)
+  getStageUnits: (stageId) => api.get(`/api/stages/${stageId}/units/`),
+
+  // 사용자의 스테이지 진행상황 조회
+  getUserStageProgress: (stageId) => api.get(`/api/user-stage-progress/${stageId}/`),
+
+  // 스테이지 완료 처리
+  completeStage: (stageId, data) => api.post(`/api/user-stage-progress/${stageId}/complete/`, data),
+};
+
+// 레슨 API
+export const lessonAPI = {
+  // 레슨 시작
+  startLesson: (lessonId) => api.post(`/api/lessons/${lessonId}/start/`),
+
+  // 현재 문제 조회
+  getCurrentProblem: (lessonId) => api.get(`/api/lessons/${lessonId}/current-problem/`),
+
+  // 레슨 포기
+  abandonLesson: (lessonId) => api.post(`/api/lessons/${lessonId}/abandon/`),
+};
+
+// 문제 풀이 API
+export const problemAPI = {
+  // 문제 제출 (코딩 문제 제외)
+  submitAnswer: (problemId, answer) => api.post(`/api/problems/${problemId}/submit/`, { answer }),
+
+  // 문제 건너뛰기 (트라이얼 문제만)
+  skipProblem: (problemId) => api.post(`/api/problems/${problemId}/skip/`),
+
+  // Judge0 API를 사용한 코드 실행 (추후 구현)
+  executeCode: (problemId, code) => {
+    // Judge0 연동은 추후 구현
+    return api.post(`/api/problems/${problemId}/execute/`, { code });
+  },
+};
+
+// 프로필 API
+export const profileAPI = {
+  // 내 프로필 조회
+  getMyProfile: () => api.get('/api/users/me/'),
+
+  // 특정 사용자 프로필 조회
+  getUserProfile: (userId) => api.get(`/api/users/${userId}/`),
+
+  // 내 프로필 수정 (PATCH)
+  updateMyProfile: (data) => api.put('/api/users/me/', data),
+
+  // 프로필 이미지 업로드
+  uploadProfileImage: (formData) => {
+    return apiClient.post('/api/users/me/upload-image/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
+
+  // 내 학습 통계 조회
+  getMyStats: () => api.get('/api/users/me/stats/'),
+
+  // 내 최근 활동 조회
+  getMyActivity: () => api.get('/api/users/me/activity/'),
+
+  // 내 업적 조회
+  getMyAchievements: () => api.get('/api/users/me/achievements/'),
+};
+
 export default api;

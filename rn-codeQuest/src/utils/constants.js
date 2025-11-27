@@ -7,12 +7,12 @@ const getApiBaseUrl = () => {
     // 프로덕션
     return 'https://api.codequest.com';
   }
-  
+
   if (Platform.OS === 'web') {
     // 웹은 localhost
     return 'http://localhost:8000';
   }
-  
+
   // 모바일 개발 환경 - 동적 IP
   const hostUri = Constants.expoConfig?.hostUri;
   const ip = hostUri?.split(':')[0]; // "10.199.106.165:8081" → "10.199.106.165"

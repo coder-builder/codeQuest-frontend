@@ -3,12 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Button, Card, TextInput, Divider } from 'react-native-paper';
 import { useAuth } from '../../context/AuthContext';
 import { Alert } from 'react-native';
+import { useTheme } from '../../utils/theme';
 
 // Google 로그인 컴포넌트 import
 import GoogleLoginButton from '../../components/auth/GoogleLoginButton';
 
 const LoginScreen = ({ navigation }) => {
   const { login, isLoading } = useAuth();
+  const { colors, isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -39,9 +41,12 @@ const LoginScreen = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.screen}>
-      <Card style={styles.card}>
-        <Card.Title title="로그인" />
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <Card style={[styles.card, { backgroundColor: colors.surface }]}>
+        <Card.Title
+          title="로그인"
+          titleStyle={{ color: colors.text }}
+        />
         <Card.Content>
           {/* 이메일/비밀번호 입력 */}
           <TextInput
@@ -52,6 +57,9 @@ const LoginScreen = ({ navigation }) => {
             style={styles.input}
             autoCapitalize="none"
             keyboardType="email-address"
+            textColor={colors.text}
+            outlineColor={colors.border}
+            activeOutlineColor={colors.primary}
           />
           <TextInput
             label="비밀번호"
@@ -60,15 +68,19 @@ const LoginScreen = ({ navigation }) => {
             mode="outlined"
             secureTextEntry
             style={styles.input}
+            textColor={colors.text}
+            outlineColor={colors.border}
+            activeOutlineColor={colors.primary}
           />
-          
+
           {/* 일반 로그인 버튼 */}
           <Button
-            mode="contained" 
+            mode="contained"
             onPress={handleLogin}
             loading={isLoading}
             disabled={isLoading}
             style={styles.button}
+            buttonColor={colors.primary}
           >
             로그인
           </Button>
@@ -76,19 +88,28 @@ const LoginScreen = ({ navigation }) => {
           {/* 구분선 */}
           <View style={styles.dividerContainer}>
             <Divider style={styles.divider} />
-            <Text style={styles.dividerText}>또는</Text>
+            <Text style={[styles.dividerText, { color: colors.textSecondary }]}>또는</Text>
             <Divider style={styles.divider} />
           </View>
 
           {/* 소셜 로그인 버튼들 */}
-          <Text style={styles.socialTitle}>소셜 로그인</Text>
+          <Text style={[styles.socialTitle, { color: colors.text }]}>소셜 로그인</Text>
 
-          {/* Google 버튼 - 분리된 컴포넌트 사용 */}
-          <GoogleLoginButton 
+          {/* Google 버튼 - 임시 비활성화 (webClientId 설정 필요) */}
+          {/* <GoogleLoginButton
             onSuccess={handleGoogleSuccess}
             onError={handleGoogleError}
             disabled={isLoading}
-          />
+          /> */}
+          <TouchableOpacity
+            style={[styles.socialButton, styles.googleButton]}
+            onPress={() => handleSocialLogin('Google')}
+            disabled={isLoading}
+          >
+            <Text style={[styles.socialButtonText]}>
+              🔍 Google로 로그인 (준비 중)
+            </Text>
+          </TouchableOpacity>
 
           {/* Kakao 버튼 */}
           <TouchableOpacity
@@ -112,9 +133,9 @@ const LoginScreen = ({ navigation }) => {
 
           {/* 회원가입 링크 */}
           <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>아직 계정이 없으신가요? </Text>
+            <Text style={[styles.registerText, { color: colors.textSecondary }]}>아직 계정이 없으신가요? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-              <Text style={styles.registerLink}>회원가입</Text>
+              <Text style={[styles.registerLink, { color: colors.primary }]}>회원가입</Text>
             </TouchableOpacity>
           </View>
         </Card.Content>
@@ -131,7 +152,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#f5f5f5',
   },
   card: {
     width: '100%',
@@ -153,14 +173,12 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 10,
-    color: '#666',
     fontSize: 14,
   },
   socialTitle: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
-    color: '#333',
   },
   socialButton: {
     flexDirection: 'row',
@@ -175,6 +193,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  googleButton: {
+    backgroundColor: '#4285F4',
   },
   kakaoButton: {
     backgroundColor: '#FEE500',
@@ -193,11 +214,9 @@ const styles = StyleSheet.create({
   },
   registerText: {
     fontSize: 14,
-    color: '#666',
   },
   registerLink: {
     fontSize: 14,
-    color: '#6200ee',
     fontWeight: '600',
   },
 });

@@ -1,370 +1,485 @@
 // src/screens/home/HomeScreen.js
-import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Button, Title, Card, ActivityIndicator, Text, ProgressBar } from 'react-native-paper';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Modal } from 'react-native';
+import { ActivityIndicator, Text, ProgressBar } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../context/AuthContext';
 import * as haptic from '../utils/haptic';
+import { worldAPI, stageAPI } from '../apis/api';
+import { useTheme } from '../utils/theme';
 
 export default function HomeScreen({ navigation }) {
   const { user, logout, isAuthenticated, isLoading } = useAuth();
-  const [coins, setCoins] = useState(1250);
-  const [xp, setXp] = useState(5430);
-  const [currentGoalXP, setCurrentGoalXP] = useState(65);
-  const [streak, setStreak] = useState(23);
+  const { colors, isDark } = useTheme();
 
-  // 레슨 데이터 - 빈 배열로 테스트 가능
-  const lessons = [
-    {
-      id: 1,
-      icon: '🎯',
-      title: 'Python 기초 - 변수와 자료형',
-      description: '변수 선언과 기본 자료형 이해하기',
-      progress: 0.75,
-      xp: 15,
-      active: true,
-    },
-    {
-      id: 2,
-      icon: '🎨',
-      title: '프론트엔드 - HTML & CSS',
-      description: '웹 페이지 레이아웃 디자인',
-      progress: 0.30,
-      xp: 15,
-      active: false,
-    },
-    {
-      id: 4,
-      icon: '⚙️',
-      title: 'Django REST API 개발',
-      description: 'RESTful API 설계와 구현',
-      progress: 0.60,
-      xp: 25,
-      active: false,
-    },
-  ];
-  
-  // 테스트용: 빈 배열로 바꿔서 테스트
-  // const lessons = [];
+  // 상태 관리
+  const [worlds, setWorlds] = useState([]);
+  const [userWorlds, setUserWorlds] = useState([]);
+  const [currentStage, setCurrentStage] = useState(null); // 현재 스테이지 정보
+  const [units, setUnits] = useState([]); // 유닛 목록 (유닛 → 레슨)
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+  const [showWorldSelector, setShowWorldSelector] = useState(false);
 
-  const leaderboard = [
-    { rank: 1, name: '김코딩', xp: 8520, avatar: '👨‍💻', color: '#FFD700' },
-    { rank: 2, name: '박개발', xp: 7345, avatar: '👩‍💻', color: '#C0C0C0' },
-    { rank: 3, name: '이프로', xp: 6890, avatar: '🧑‍💻', color: '#CD7F32' },
-    { rank: 8, name: user?.nickname || '나', xp: 5430, avatar: '🎓', isMe: true },
-  ];
+  // 사용자 통계
+  const hearts = user?.hearts || 5;
+  const streak = user?.streak_days || 0;
+  const coins = user?.coins || 0;
 
-  const startLesson = (lesson) => {
-    haptic.successFeedback();
-    setXp(xp + lesson.xp);
-    setCoins(coins + 5);
-    const newGoalXP = Math.min(currentGoalXP + lesson.xp, 100);
-    setCurrentGoalXP(newGoalXP);
-  };
+  // 마지막 공부한 월드
+  const lastStudiedUserWorld = userWorlds.length > 0 ? userWorlds[0] : null;
+  const lastStudiedWorld = lastStudiedUserWorld 
+    ? worlds.find(w => w.id === lastStudiedUserWorld.world) 
+    : null;
 
-  const completeGoal = () => {
-    if (currentGoalXP >= 100) {
-      haptic.heavyImpact();
-      setCoins(coins + 50);
-      setTimeout(() => {
-        setCurrentGoalXP(0);
-      }, 1000);
-    } else {
-      haptic.lightImpact();
+  // 월드 + 스테이지 + 유닛 데이터 한 번에 로드
+  const loadAllData = async () => {
+    if (!isAuthenticated) return;
+
+    try {
+      setIsLoadingData(true);
+      setError(null);
+
+      // 1. 월드 데이터 먼저 로드
+      const [worldsData, userWorldsData] = await Promise.all([
+        worldAPI.getWorlds(),
+        worldAPI.getUserWorlds(),
+      ]);
+
+      setWorlds(worldsData);
+      setUserWorlds(userWorldsData);
+
+      // 2. 마지막 공부한 월드의 현재 스테이지 찾기
+      if (userWorldsData.length > 0) {
+        const lastWorldId = userWorldsData[0].world;
+        const lastUserWorld = userWorldsData[0];
+
+        // 스테이지 목록 가져오기
+        const stagesData = await worldAPI.getWorldStages(lastWorldId);
+
+        // 현재 학습 중인 스테이지 (완료 스테이지 + 1)
+        const currentStageIndex = lastUserWorld.completed_stage;
+        const currentStageData = stagesData[currentStageIndex];
+
+        if (currentStageData) {
+          setCurrentStage(currentStageData);
+
+          // 3. 현재 스테이지의 유닛 목록 로드
+          const unitsData = await stageAPI.getStageUnits(currentStageData.id);
+          setUnits(unitsData.units || []); // units 배열만 추출
+        }
+      }
+    } catch (err) {
+      console.error('데이터 로드 실패:', err);
+      setError(err.response?.data?.message || '데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setIsLoadingData(false);
+      setRefreshing(false);
     }
   };
 
-  const handleLogout = () => {
-    haptic.mediumImpact();
-    logout();
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      loadAllData();
+    }
+  }, [isAuthenticated, user]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadAllData();
   };
+
+  const handleStagePress = () => {
+    haptic.lightImpact();
+
+    navigation.navigate('WorldDetail', {
+      worldId: lastStudiedWorld.id,
+      world: lastStudiedWorld,
+      userWorld: lastStudiedUserWorld,
+    });
+  };
+
+  const handleWorldSelectorPress = () => {
+    haptic.lightImpact();
+    setShowWorldSelector(true);
+  };
+
+  const handleWorldSelect = async (world) => {
+    haptic.lightImpact();
+    setShowWorldSelector(false);
+
+    const userWorld = userWorlds.find(uw => uw.world === world.id);
+
+    if (world.is_locked && (!userWorld || !userWorld.is_unlocked)) {
+      alert('이 월드는 아직 잠겨있습니다.');
+      return;
+    }
+
+    // 선택한 월드로 이동
+    navigation.navigate('WorldDetail', {
+      worldId: world.id,
+      world: world,
+      userWorld: userWorld,
+    });
+  };
+
+  const styles = createStyles(colors, isDark);
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#6200ee" />
-        <Text style={{ marginTop: 16, fontSize: 16 }}>
-          로그인 상태 확인 중...
-        </Text>
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>로그인 상태 확인 중...</Text>
+      </View>
+    );
+  }
+
+  if (!user || !isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loginPrompt}>
+          <Text style={styles.loginTitle}>CodeQuest에 오신 것을 환영합니다! 🚀</Text>
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.loginButtonText}>로그인</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.registerButton}
+            onPress={() => navigation.navigate('Register')}
+          >
+            <Text style={styles.registerButtonText}>회원가입</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <>
-      {user && isAuthenticated ? (
-        <ScrollView style={styles.scrollContainer}>
-          <LinearGradient
-            colors={['#667eea', '#764ba2']}
-            style={styles.gradientBackground}
-          >
-            {/* 헤더 */}
-            <View style={styles.header}> 
-              <View style={styles.logoSection}>
-                <View style={styles.logoIcon}>
-                  <Text style={styles.logoEmoji}>💻</Text>
-                </View>
-                <Text style={styles.logoText}>CodeQuest</Text>
-              </View>
+    <View style={styles.container}>
+      {/* 상단 헤더 */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          {lastStudiedWorld ? (
+            <TouchableOpacity
+              style={styles.currentLanguage}
+              onPress={handleWorldSelectorPress}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.languageIcon}>{lastStudiedWorld.icon}</Text>
+              <Text style={styles.languageTitle}>{lastStudiedWorld.title}</Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.headerTitle}>CodeQuest</Text>
+          )}
+        </View>
 
-              <View style={styles.statsSection}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statEmoji}>🪙</Text>
-                  <Text style={styles.statValue}>{coins.toLocaleString()}</Text>
-                </View>
-                <View style={styles.statItem}>
-                  <Text style={styles.statEmoji}>⚡</Text>
-                  <Text style={styles.statValue}>{xp.toLocaleString()}</Text>
-                </View>
-                <TouchableOpacity 
-                  onPress={handleLogout} 
-                  style={styles.statItem}
-                >
-                  <Text style={styles.statEmoji}>👤</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+        <View style={styles.headerRight}>
+          <View style={styles.statBadge}>
+            <Text style={styles.statEmoji}>🔥</Text>
+            <Text style={styles.statValue}>{streak}</Text>
+          </View>
 
-            {/* 메인 컨텐츠 */}
-            <View style={styles.mainContent}>
-              {/* 학습 경로 카드 */}
-              <Card style={styles.card}>
-                <Card.Content>
-                  <View style={styles.pathHeader}>
-                    <Text style={styles.pathTitle}>학습 경로</Text>
-                    <LinearGradient
-                      colors={['#ffd700', '#ffed4e']}
-                      style={styles.levelBadge}
-                    >
-                      <Text style={styles.levelText}>레벨 12</Text>
-                    </LinearGradient>
-                  </View>
+          <View style={styles.statBadge}>
+            <Text style={styles.statEmoji}>💎</Text>
+            <Text style={styles.statValue}>{coins}</Text>
+          </View>
 
-                  {/* 레슨 목록 또는 빈 상태 */}
-                  {lessons.length > 0 ? (
-                    // 레슨이 있을 때
-                    lessons.map((lesson) => (
-                      <TouchableOpacity
-                        key={lesson.id}
-                        onPress={() => startLesson(lesson)}
-                        activeOpacity={0.7}
-                      >
-                        <LinearGradient
-                          colors={lesson.active ? ['#667eea', '#764ba2'] : ['#f8f9fa', '#f8f9fa']}
-                          style={styles.lessonItem}
-                        >
-                          <View style={styles.lessonIcon}>
-                            <Text style={styles.lessonEmoji}>{lesson.icon}</Text>
-                          </View>
-                          <View style={styles.lessonInfo}>
-                            <Text style={[
-                              styles.lessonTitle,
-                              lesson.active && styles.lessonTitleActive
-                            ]}>
-                              {lesson.title}
-                            </Text>
-                            <Text style={[
-                              styles.lessonDescription,
-                              lesson.active && styles.lessonDescriptionActive
-                            ]}>
-                              {lesson.description}
-                            </Text>
-                          </View>
-                          <View style={styles.lessonProgress}>
-                            <View style={styles.progressBarContainer}>
-                              <ProgressBar
-                                progress={lesson.progress}
-                                color={lesson.active ? "#fff" : "#58cc02"}
-                                style={styles.progressBar}
-                              />
-                            </View>
-                            <Text style={[
-                              styles.lessonXP,
-                              lesson.active && styles.lessonXPActive
-                            ]}>
-                              +{lesson.xp} XP
-                            </Text>
-                          </View>
-                        </LinearGradient>
-                      </TouchableOpacity>
-                    ))
-                  ) : (
-                    // 레슨이 없을 때 - 빈 상태 표시
-                    <View style={styles.emptyState}>
-                      <Text style={styles.emptyStateEmoji}>📚</Text>
-                      <Text style={styles.emptyStateTitle}>진행중인 코스가 없습니다</Text>
-                      <Text style={styles.emptyStateDescription}>
-                        새로운 코스를 시작해보세요!
-                      </Text>
-                      <Button
-                        mode="contained"
-                        onPress={() => {
-                          haptic.lightImpact();
-                          // navigation.navigate('CourseCatalog'); // 코스 목록 화면으로 이동
-                          alert('코스 목록 화면으로 이동 (구현 예정)');
-                        }}
-                        style={styles.emptyStateButton}
-                        buttonColor="#667eea"
-                      >
-                        코스 둘러보기
-                      </Button>
-                    </View>
-                  )}
-                </Card.Content>
-              </Card>
+          <View style={styles.statBadge}>
+            <Text style={styles.statEmoji}>❤️</Text>
+            <Text style={styles.statValue}>{hearts}</Text>
+          </View>
 
-              {/* 오늘의 목표 */}
-              <Card style={styles.card}>
-                <Card.Content>
-                  <View style={styles.goalHeader}>
-                    <Text style={styles.goalEmoji}>🎯</Text>
-                    <Text style={styles.goalTitle}>오늘의 목표</Text>
-                  </View>
-                  <View style={styles.goalProgressContainer}>
-                    <ProgressBar
-                      progress={currentGoalXP / 100}
-                      color="#58cc02"
-                      style={styles.goalProgressBar}
-                    />
-                  </View>
-                  <Text style={styles.goalText}>
-                    <Text style={styles.goalTextBold}>{currentGoalXP}</Text> / 100 XP 달성
-                  </Text>
-                  <Button
-                    mode="contained"
-                    onPress={completeGoal}
-                    style={styles.startButton}
-                    labelStyle={styles.startButtonLabel}
-                    buttonColor="#58cc02"
-                  >
-                    학습 계속하기 🚀
-                  </Button>
-                </Card.Content>
-              </Card>
+          <TouchableOpacity onPress={logout} style={styles.profileButton}>
+            <Text style={styles.profileEmoji}>👤</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-              {/* 스트릭 카드 */}
+      {/* 메인 컨텐츠 */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoadingData ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#a855f7" />
+            <Text style={styles.loadingDataText}>로딩 중...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorEmoji}>⚠️</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadAllData}>
+              <Text style={styles.retryButtonText}>다시 시도</Text>
+            </TouchableOpacity>
+          </View>
+        ) : lastStudiedWorld && lastStudiedUserWorld && currentStage && units.length > 0 ? (
+          <>
+            {/* 현재 섹션 배너 */}
+            <View style={styles.sectionBanner}>
               <LinearGradient
-                colors={['#ff6b6b', '#ee5a6f']}
-                style={styles.streakCard}
+                colors={['#ec4899', '#d946ef']}
+                style={styles.bannerGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
               >
-                <Text style={styles.streakNumber}>{streak}</Text>
-                <Text style={styles.streakText}>일 연속 학습 🔥</Text>
-                <View style={styles.streakCalendar}>
-                  {['월', '화', '✓', '✓', '✓', '✓', '✓'].map((day, index) => (
-                    <View
-                      key={index}
-                      style={[
-                        styles.calendarDay,
-                        day === '✓' && styles.calendarDayActive
-                      ]}
-                    >
-                      <Text style={styles.calendarDayText}>{day}</Text>
-                    </View>
-                  ))}
+                <View style={styles.bannerContent}>
+                  <View>
+                    <Text style={styles.bannerLabel}>
+                      {lastStudiedWorld.title.toUpperCase()} • STAGE {lastStudiedUserWorld.completed_stage + 1}
+                    </Text>
+                    <Text style={styles.bannerTitle}>
+                      {currentStage.title}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.bannerIcon}
+                    onPress={handleStagePress}
+                  >
+                    <Text style={styles.bannerIconText}>
+                      {lastStudiedWorld.icon || '📚'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </LinearGradient>
+            </View>
 
-              {/* 리더보드 */}
-              <Card style={styles.card}>
-                <Card.Content>
-                  <View style={styles.leaderboardHeader}>
-                    <Text style={styles.leaderboardEmoji}>🏆</Text>
-                    <Text style={styles.leaderboardTitle}>주간 랭킹</Text>
+            {/* 유닛 경로 (듀오링고 스타일: Unit → Lesson) */}
+            <View style={styles.unitsPath}>
+              {units.map((unit, unitIndex) => (
+                <View key={unit.id} style={styles.unitSection}>
+                  {/* 유닛 제목 */}
+                  <View style={styles.unitHeader}>
+                    <Text style={styles.unitTitle}>Unit {unitIndex + 1}</Text>
+                    <Text style={styles.unitSubtitle}>{unit.title}</Text>
                   </View>
-                  
-                  {leaderboard.map((player) => (
-                    <View
-                      key={player.rank}
-                      style={[
-                        styles.leaderboardItem,
-                        player.isMe && styles.leaderboardItemMe
-                      ]}
-                    >
-                      <View style={[
-                        styles.leaderboardRank,
-                        { backgroundColor: player.color || '#e9ecef' }
-                      ]}>
-                        <Text style={styles.leaderboardRankText}>
-                          {player.rank}
-                        </Text>
-                      </View>
-                      <View style={styles.leaderboardAvatar}>
-                        <Text style={styles.leaderboardAvatarText}>
-                          {player.avatar}
-                        </Text>
-                      </View>
-                      <View style={styles.leaderboardUser}>
+
+                  {/* 레슨 목록 */}
+                  <View style={styles.lessonsContainer}>
+                    {unit.lessons.map((lesson, lessonIndex) => {
+                      const isUnlocked = lesson.is_unlocked;
+                      const isCompleted = lesson.is_completed || false;
+
+                      // 지그재그 레이아웃
+                      const position = lessonIndex % 3; // 0: 중앙, 1: 오른쪽, 2: 왼쪽
+
+                      return (
+                        <View key={lesson.id} style={styles.lessonItem}>
+                          {/* 연결선 */}
+                          {lessonIndex > 0 && (
+                            <View style={styles.connectionLine} />
+                          )}
+
+                          {/* 레슨 버튼 */}
+                          <TouchableOpacity
+                            onPress={() => {
+                              haptic.lightImpact();
+                              if (isUnlocked) {
+                                navigation.navigate('Lesson', {
+                                  lessonId: lesson.id,
+                                  lessonTitle: lesson.title
+                                });
+                              } else {
+                                alert('이전 레슨을 먼저 완료해주세요.');
+                              }
+                            }}
+                            disabled={!isUnlocked}
+                            activeOpacity={0.8}
+                            style={[
+                              styles.lessonButton,
+                              position === 0 && styles.lessonCenter,
+                              position === 1 && styles.lessonRight,
+                              position === 2 && styles.lessonLeft,
+                            ]}
+                          >
+                            <View style={[
+                              styles.lessonCircle,
+                              isCompleted && styles.lessonCompleted,
+                              isUnlocked && !isCompleted && styles.lessonUnlocked,
+                              !isUnlocked && styles.lessonLocked,
+                            ]}>
+                              <Text style={styles.lessonEmoji}>
+                                {isCompleted ? '⭐' : !isUnlocked ? '🔒' : '📚'}
+                              </Text>
+                            </View>
+
+                            {/* 레슨 정보 */}
+                            {isUnlocked && !isCompleted && (
+                              <View style={styles.lessonInfoBox}>
+                                <Text style={styles.lessonInfoTitle}>{lesson.title}</Text>
+                                <Text style={styles.lessonInfoMeta}>
+                                  {lesson.problem_count || 0}개 문제
+                                </Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+
+                          {/* 완료된 레슨 하단 별 3개 */}
+                          {isCompleted && (
+                            <View style={styles.lessonStars}>
+                              <Text style={styles.starIcon}>⭐</Text>
+                              <Text style={styles.starIcon}>⭐</Text>
+                              <Text style={styles.starIcon}>⭐</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>🌍</Text>
+            <Text style={styles.emptyTitle}>아직 월드가 없습니다</Text>
+            <Text style={styles.emptyDescription}>
+              관리자가 월드를 추가하면 여기에 표시됩니다.
+            </Text>
+          </View>
+        )}
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {/* 월드 선택 모달 */}
+      <Modal
+        visible={showWorldSelector}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowWorldSelector(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* 모달 헤더 */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>월드 선택</Text>
+              <TouchableOpacity
+                onPress={() => setShowWorldSelector(false)}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 월드 목록 */}
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+              {worlds.map((world) => {
+                const userWorld = userWorlds.find(uw => uw.world === world.id);
+                const isLocked = world.is_locked && (!userWorld || !userWorld.is_unlocked);
+                const isCurrent = lastStudiedWorld?.id === world.id;
+
+                return (
+                  <TouchableOpacity
+                    key={world.id}
+                    style={[
+                      styles.worldSelectItem,
+                      isCurrent && styles.worldSelectItemCurrent,
+                      isLocked && styles.worldSelectItemLocked,
+                    ]}
+                    onPress={() => handleWorldSelect(world)}
+                    disabled={isLocked}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.worldSelectLeft}>
+                      <Text style={styles.worldSelectIcon}>{world.icon}</Text>
+                      <View>
                         <Text style={[
-                          styles.leaderboardName,
-                          player.isMe && styles.leaderboardNameMe
+                          styles.worldSelectTitle,
+                          isLocked && styles.worldSelectTitleLocked
                         ]}>
-                          {player.name}
+                          {world.title}
                         </Text>
-                        <Text style={[
-                          styles.leaderboardXP,
-                          player.isMe && styles.leaderboardXPMe
-                        ]}>
-                          {player.xp.toLocaleString()} XP
-                        </Text>
+                        {userWorld && !isLocked && (
+                          <Text style={styles.worldSelectProgress}>
+                            {userWorld.completed_stage}/{userWorld.total_stage} 스테이지 완료
+                          </Text>
+                        )}
                       </View>
                     </View>
-                  ))}
-                </Card.Content>
-              </Card>
-            </View>
-          </LinearGradient>
-        </ScrollView>
-      ) : (
-        // 로그인 안 된 경우
-        <View style={styles.container}>
-          <Card>
-            <Card.Content>
-              <Title style={styles.title}>CodeQuest에 오신 것을 환영합니다! 🚀</Title>
-              <Button 
-                mode="contained" 
-                onPress={() => {
-                  haptic.lightImpact();
-                  navigation.navigate('Login');
-                }}
-                style={styles.button}
-              >
-                로그인
-              </Button>
-              <Button 
-                mode="outlined" 
-                onPress={() => {
-                  haptic.lightImpact();
-                  navigation.navigate('Register');
-                }}
-                style={styles.button}
-              >
-                회원가입
-              </Button>
-            </Card.Content>
-          </Card>
+                    {isCurrent && (
+                      <View style={styles.currentBadge}>
+                        <Text style={styles.currentBadgeText}>학습 중</Text>
+                      </View>
+                    )}
+                    {isLocked && (
+                      <Text style={styles.worldSelectLockIcon}>🔒</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
-      )}
-    </>
+      </Modal>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  scrollContainer: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  gradientBackground: {
-    flex: 1,
-    paddingTop: 20,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
+const createStyles = (colors, isDark) => StyleSheet.create({
   container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  loadingScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    backgroundColor: colors.background,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+
+  // 로그인 프롬프트
+  loginPrompt: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  loginTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 40,
+    color: colors.text,
+  },
+  loginButton: {
+    width: '100%',
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  loginButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  registerButton: {
+    width: '100%',
+    backgroundColor: colors.buttonSecondary,
+    paddingVertical: 16,
+    borderRadius: 16,
+  },
+  registerButtonText: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 
   // 헤더
@@ -372,347 +487,375 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  logoSection: {
+  headerLeft: {
+    flex: 1,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  currentLanguage: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
-  logoIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#667eea',
-    borderRadius: 15,
+  languageIcon: {
+    fontSize: 24,
+  },
+  languageTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: 4,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statEmoji: {
+    fontSize: 16,
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  profileButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoEmoji: {
-    fontSize: 30,
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#667eea',
-  },
-  statsSection: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 15,
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  statEmoji: {
+  profileEmoji: {
     fontSize: 20,
   },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+
+  // 스크롤뷰
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 20,
   },
 
-  // 메인 컨텐츠
-  mainContent: {
-    gap: 20,
+  // 섹션 배너
+  sectionBanner: {
+    marginBottom: 40,
   },
-  card: {
+  bannerGradient: {
     borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    overflow: 'hidden',
   },
-
-  // 학습 경로
-  pathHeader: {
+  bannerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 24,
   },
-  pathTitle: {
-    fontSize: 22,
+  bannerLabel: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  bannerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#fff',
   },
-  levelBadge: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  levelText: {
-    fontWeight: 'bold',
-    color: '#333',
-  },
-
-  // 빈 상태 (Empty State)
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  emptyStateEmoji: {
-    fontSize: 60,
-    marginBottom: 15,
-  },
-  emptyStateTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emptyStateDescription: {
-    fontSize: 15,
-    color: '#666',
-    marginBottom: 25,
-    textAlign: 'center',
-  },
-  emptyStateButton: {
-    borderRadius: 15,
-    paddingHorizontal: 20,
-  },
-
-  // 레슨 아이템
-  lessonItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 10,
-  },
-  lessonIcon: {
-    width: 50,
-    height: 50,
-    backgroundColor: 'white',
+  bannerIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
   },
-  lessonEmoji: {
-    fontSize: 28,
-  },
-  lessonInfo: {
-    flex: 1,
-  },
-  lessonTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  lessonTitleActive: {
-    color: 'white',
-  },
-  lessonDescription: {
-    fontSize: 13,
-    color: '#666',
-  },
-  lessonDescriptionActive: {
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  lessonProgress: {
-    alignItems: 'flex-end',
-    gap: 8,
-  },
-  progressBarContainer: {
-    width: 80,
-  },
-  progressBar: {
-    height: 6,
-    borderRadius: 10,
-    backgroundColor: '#e9ecef',
-  },
-  lessonXP: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#58cc02',
-  },
-  lessonXPActive: {
-    color: 'white',
-  },
-
-  // 오늘의 목표
-  goalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 15,
-  },
-  goalEmoji: {
-    fontSize: 30,
-  },
-  goalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  goalProgressContainer: {
-    marginBottom: 10,
-  },
-  goalProgressBar: {
-    height: 20,
-    borderRadius: 20,
-    backgroundColor: '#e9ecef',
-  },
-  goalText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 15,
-  },
-  goalTextBold: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#58cc02',
-  },
-  startButton: {
-    borderRadius: 15,
-    paddingVertical: 8,
-  },
-  startButtonLabel: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-
-  // 스트릭 카드
-  streakCard: {
-    borderRadius: 20,
-    padding: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  streakNumber: {
-    fontSize: 50,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 5,
-  },
-  streakText: {
-    fontSize: 18,
-    color: 'white',
-    opacity: 0.9,
-    marginBottom: 15,
-  },
-  streakCalendar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  calendarDay: {
-    flex: 1,
-    aspectRatio: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  calendarDayActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-  },
-  calendarDayText: {
-    fontSize: 14,
-    color: 'white',
-    fontWeight: 'bold',
-  },
-
-  // 리더보드
-  leaderboardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 15,
-  },
-  leaderboardEmoji: {
-    fontSize: 30,
-  },
-  leaderboardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  leaderboardItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 15,
-    marginBottom: 10,
-  },
-  leaderboardItemMe: {
-    backgroundColor: '#667eea',
-  },
-  leaderboardRank: {
-    width: 35,
-    height: 35,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  leaderboardRankText: {
-    fontWeight: 'bold',
-    color: '#333',
-    fontSize: 14,
-  },
-  leaderboardAvatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 25,
-    backgroundColor: '#667eea',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  leaderboardAvatarText: {
-    fontSize: 22,
-  },
-  leaderboardUser: {
-    flex: 1,
-  },
-  leaderboardName: {
-    fontWeight: 'bold',
-    fontSize: 15,
-    color: '#333',
-    marginBottom: 2,
-  },
-  leaderboardNameMe: {
-    color: 'white',
-  },
-  leaderboardXP: {
-    fontSize: 13,
-    color: '#666',
-  },
-  leaderboardXPMe: {
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-
-  // 비로그인 상태
-  title: {
+  bannerIconText: {
     fontSize: 24,
-    textAlign: 'center',
+  },
+
+  // 유닛 경로
+  unitsPath: {
+    paddingVertical: 20,
+  },
+  unitSection: {
+    marginBottom: 40,
+  },
+  unitHeader: {
+    paddingHorizontal: 20,
     marginBottom: 20,
   },
-  button: {
-    marginTop: 10,
+  unitTitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  unitSubtitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+
+  // 레슨 경로
+  lessonsContainer: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  lessonItem: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  connectionLine: {
+    width: 4,
+    height: 40,
+    backgroundColor: colors.surfaceVariant,
+    marginBottom: 10,
+  },
+  lessonButton: {
+    alignItems: 'center',
+  },
+  lessonCenter: {
+    alignSelf: 'center',
+  },
+  lessonRight: {
+    alignSelf: 'flex-end',
+    marginRight: 60,
+  },
+  lessonLeft: {
+    alignSelf: 'flex-start',
+    marginLeft: 60,
+  },
+  lessonCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  lessonUnlocked: {
+    backgroundColor: colors.secondary,
+    borderWidth: 4,
+    borderColor: colors.secondaryLight,
+  },
+  lessonCompleted: {
+    backgroundColor: colors.warning,
+  },
+  lessonLocked: {
+    backgroundColor: colors.surfaceVariant,
+  },
+  lessonEmoji: {
+    fontSize: 40,
+  },
+  lessonInfoBox: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  lessonInfoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  lessonInfoMeta: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  lessonStars: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  starIcon: {
+    fontSize: 20,
+    opacity: 0.6,
+  },
+
+  // 로딩/에러
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  loadingDataText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  errorContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+  },
+  errorEmoji: {
+    fontSize: 60,
+    marginBottom: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.error,
+    textAlign: 'center',
+    marginBottom: 30,
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  // 빈 상태
+  emptyState: {
+    paddingVertical: 80,
+    alignItems: 'center',
+  },
+  emptyEmoji: {
+    fontSize: 60,
+    marginBottom: 20,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  emptyDescription: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+
+  // 모달 스타일
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 20,
+    color: colors.textSecondary,
+  },
+  modalContent: {
+    padding: 20,
+  },
+
+  // 월드 선택 아이템
+  worldSelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
+  },
+  worldSelectItemCurrent: {
+    backgroundColor: colors.surfaceVariant,
+    borderWidth: 2,
+    borderColor: colors.secondary,
+  },
+  worldSelectItemLocked: {
+    opacity: 0.5,
+  },
+  worldSelectLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  worldSelectIcon: {
+    fontSize: 32,
+  },
+  worldSelectTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  worldSelectTitleLocked: {
+    color: colors.textSecondary,
+  },
+  worldSelectProgress: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  worldSelectLockIcon: {
+    fontSize: 24,
+  },
+  currentBadge: {
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  currentBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });
