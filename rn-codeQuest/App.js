@@ -12,6 +12,7 @@ import { AuthProvider } from "./src/context/AuthContext";
 import HomeStack from "./src/navigation/HomeStack";
 import AppNavigator from "./src/navigation/AppNavigator";
 import RankScreen from "./src/screens/rank/RankScreen";
+import ResultScreen from "./src/screens/progress/ResultScreen";
 
 const App = () => {
   return (
@@ -55,6 +56,13 @@ const App = () => {
               component={RankScreen}
               options={{ tabBarLabel: "랭크" }}
             />
+
+            {/* <Tab.Screen
+              name="ResultScreen"
+              component={ResultScreen}
+              options={{ tabBarLabel: "레슨결과" }}
+            /> */}
+            
           </Tab.Navigator>
         </NavigationContainer>
       </AuthProvider>

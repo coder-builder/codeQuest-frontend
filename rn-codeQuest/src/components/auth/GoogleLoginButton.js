@@ -49,14 +49,14 @@ const GoogleLoginButton = ({ onSuccess, onError, disabled = false }) => {
   // Google 로그인 처리
   const handleGoogleLogin = async (googleAccessToken) => {
       
-    const result = await socialLogin('google', googleAccessToken);
-    
-    if (result.success) {
+    const authResult = await socialLogin('google', googleAccessToken);
+
+    if (authResult.success) {
       // 성공하면 AuthContext에서 자동으로 상태 업데이트됨
       navigation.navigate('Home');
     } else {
-      console.error('Google 로그인 실패:', result.error);
-      Alert.alert('로그인 실패', result.error || 'Google 로그인에 실패했습니다.');
+      console.error('Google 로그인 실패:', authResult.error);
+      Alert.alert('로그인 실패', authResult.error || 'Google 로그인에 실패했습니다.');
     }
   };
 
@@ -73,7 +73,7 @@ const GoogleLoginButton = ({ onSuccess, onError, disabled = false }) => {
 
 export default GoogleLoginButton;
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',

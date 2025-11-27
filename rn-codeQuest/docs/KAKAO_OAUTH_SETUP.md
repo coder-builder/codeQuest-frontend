@@ -132,13 +132,17 @@ EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY=abcdef1234567890abcdef1234567890
 ### 6-1. 카카오 로그인 설정
 1. 왼쪽 메뉴 → "카카오 로그인" 클릭
 2. **활성화 설정** → "ON"으로 변경
-3. **Redirect URI** 등록:
 
-```
+> ⚠️ **Redirect URI 등록은 불필요합니다! (웹환경)**
+<!-- ```
 http://localhost:8081/auth/kakao/callback
 ```
-
-> 💡 웹 테스트용입니다. 네이티브 앱에서는 사용하지 않습니다.
+> 💡 웹 테스트용입니다. 네이티브 앱에서는 사용하지 않습니다. -->
+> 
+> `@react-native-seoul/kakao-login` 라이브러리는 네이티브 SDK를 사용하므로,
+> 웹 기반 Redirect URI 대신 **앱의 URL Scheme**(`rn-codequest://`)을 사용합니다.
+> 
+> Redirect URI는 Kakao JavaScript SDK를 웹에서 사용할 때만 필요합니다.
 
 ### 6-2. 동의 항목 설정
 1. 왼쪽 메뉴 → "동의 항목" 클릭

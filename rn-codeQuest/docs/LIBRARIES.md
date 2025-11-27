@@ -1,6 +1,7 @@
-### 라이브러리 설치 후 기록해주시면 감사하겠습니다.! ###
+### 라이브러리 설치 후 기록해주시면 감사하겠습니다.!
 
 # 라이브러리 설치
+
 npx expo install react-dom react-native-web
 npm install react-native-paper
 npm install @react-navigation/native
@@ -28,3 +29,4 @@ npm install expo-constants
 npm install expo-auth-session expo-crypto
 npm install expo-web-browser
 npm install -g eas-cli
+npm install expo-linear-gradient
